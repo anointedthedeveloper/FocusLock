@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FocusLock | Stay Driven</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Internal CSS for custom animations and cursors */
+        .timer-glow { transition: all 0.5s ease; }
+        .focus-mode { background-color: #000 !important; color: #fff !important; }
+        .focus-mode border-black { border-color: #fff !important; }
+        #timer-display { font-variant-numeric: tabular-nums; }
+        button:disabled { cursor: not-allowed; opacity: 0.5; }
+    </style>
+</head>
+<body class="bg-white text-black min-h-screen flex flex-col font-mono">
+
+    <nav class="border-b border-black p-6 flex justify-between items-center">
+        <h1 class="text-3xl font-black tracking-tighter">FOCUSLOCK.</h1>
+        <div class="flex gap-6 items-center">
+            <div class="text-sm border border-black px-3 py-1">STREAK: <span id="streak-count">0</span> 🔥</div>
+            <div class="text-sm font-bold">POINTS: <span id="points-count">0</span></div>
+        </div>
+    </nav>
+
+    <main class="flex-grow container mx-auto px-4 py-12">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            
+            <div class="flex flex-col items-center justify-center border-2 border-black p-10">
+                <h2 class="uppercase text-xs tracking-widest mb-4">Current Session</h2>
+                <div id="timer-display" class="text-9xl font-black mb-8">25:00</div>
+                
+                <div id="setup-controls" class="flex gap-4">
+                    <button onclick="initTimer(25)" class="border-2 border-black px-8 py-3 hover:bg-black hover:text-white transition-all font-bold">25m</button>
+                    <button onclick="initTimer(45)" class="border-2 border-black px-8 py-3 hover:bg-black hover:text-white transition-all font-bold">45m</button>
+                    <button onclick="initTimer(60)" class="border-2 border-black px-8 py-3 hover:bg-black hover:text-white transition-all font-bold">60m</button>
+                </div>
+
+                <div id="active-controls" class="hidden flex flex-col items-center">
+                    <p class="text-red-600 mb-4 animate-pulse uppercase text-xs">Focus Mode Active: Blocklist Engaged</p>
+                    <button onclick="emergencyExit()" class="bg-red-600 text-white px-10 py-3 hover:bg-red-700 font-bold">EMERGENCY EXIT (-50 PTS)</button>
+                </div>
+            </div>
+
+            <div class="space-y-8">
+                <div class="border-2 border-black p-6">
+                    <h3 class="font-black uppercase mb-4">Productivity Trend</h3>
+                    <canvas id="productivityChart" height="150"></canvas>
+                </div>
+
+                <div class="border-2 border-black p-6">
+                    <h3 class="font-black uppercase mb-4">Distraction Shield</h3>
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="site-input" placeholder="e.g. youtube.com" class="flex-grow border border-black p-2 focus:outline-none focus:ring-1 focus:ring-black">
+                        <button onclick="addSite()" class="bg-black text-white px-6 py-2">BLOCK</button>
+                    </div>
+                    <ul id="block-list" class="space-y-2 text-sm italic opacity-70">
+                        </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let timer;
+        let timeLeft;
+        let isFocusing = false;
+        let blocklist = ['facebook.com', 'tiktok.com'];
+
+        // Initialize Stats Chart
+        const ctx = document.getElementById('productivityChart').getContext('2d');
+        const statsChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
+                datasets: [{
+                    label: 'Focus Minutes',
+                    data: [120, 150, 80, 200, 45, 0, 0],
+                    backgroundColor: '#000'
+                }]
+            },
+            options: { 
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, grid: { display: false } } }
+            }
+        });
+
+        function updateDisplay() {
+            const mins = Math.floor(timeLeft / 60);
+            const secs = timeLeft % 60;
+            document.getElementById('timer-display').innerText = 
+                `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function initTimer(minutes) {
+            timeLeft = minutes * 60;
+            isFocusing = true;
+            updateDisplay();
+            
+            document.getElementById('setup-controls').classList.add('hidden');
+            document.getElementById('active-controls').classList.remove('hidden');
+            document.body.classList.add('focus-mode');
+
+            timer = setInterval(() => {
+                timeLeft--;
+                updateDisplay();
+                if (timeLeft <= 0) finishSession(true);
+            }, 1000);
+        }
+
+        async function finishSession(success) {
+            clearInterval(timer);
+            isFocusing = false;
+            document.body.classList.remove('focus-mode');
+            document.getElementById('setup-controls').classList.remove('hidden');
+            document.getElementById('active-controls').classList.add('hidden');
+
+            if (success) {
+                alert("Great work! Session recorded.");
+                // In a real app, you'd fetch('/api/sessions') here
+            }
+        }
+
+        function emergencyExit() {
+            if(confirm("Exit now? This session will be marked as FAILED.")) {
+                finishSession(false);
+            }
+        }
+
+        function addSite() {
+            const input = document.getElementById('site-input');
+            if(input.value) {
+                blocklist.push(input.value);
+                renderBlocklist();
+                input.value = '';
+            }
+        }
+
+        function renderBlocklist() {
+            const list = document.getElementById('block-list');
+            list.innerHTML = blocklist.map(site => `<li>• ${site}</li>`).join('');
+        }
+
+        renderBlocklist();
+    </script>
+</body>
+</html>
