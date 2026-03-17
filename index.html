@@ -7,12 +7,49 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* Internal CSS for custom animations and cursors */
-        .timer-glow { transition: all 0.5s ease; }
-        .focus-mode { background-color: #000 !important; color: #fff !important; }
-        .focus-mode border-black { border-color: #fff !important; }
-        #timer-display { font-variant-numeric: tabular-nums; }
-        button:disabled { cursor: not-allowed; opacity: 0.5; }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0.2); }
+            50% { box-shadow: 0 0 20px 5px rgba(0,0,0,0.4); }
+        }
+        
+        .timer-glow-active {
+            animation: pulse-glow 2s infinite;
+        }
+        
+        .timer-progress {
+            transition: stroke-dashoffset 1s linear;
+        }
+        
+        .focus-mode .timer-display {
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        
+        .distraction-item {
+            transition: all 0.2s ease;
+        }
+        
+        .distraction-item:hover {
+            transform: translateX(-5px);
+        }
+        
+        .streak-flame {
+            transition: all 0.3s ease;
+        }
+        
+        .streak-flame.active {
+            filter: drop-shadow(0 0 8px #ff6b6b);
+        }
+        
+        .session-complete {
+            animation: confetti 1s ease;
+        }
+        
+        @keyframes confetti {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); background: #000; color: #fff; }
+            100% { transform: scale(1); }
+        }
     </style>
 </head>
 <body class="bg-white text-black min-h-screen flex flex-col font-mono">
@@ -20,130 +57,472 @@
     <nav class="border-b border-black p-6 flex justify-between items-center">
         <h1 class="text-3xl font-black tracking-tighter">FOCUSLOCK.</h1>
         <div class="flex gap-6 items-center">
-            <div class="text-sm border border-black px-3 py-1">STREAK: <span id="streak-count">0</span> 🔥</div>
-            <div class="text-sm font-bold">POINTS: <span id="points-count">0</span></div>
+            <div class="text-sm border border-black px-3 py-1 flex items-center gap-1">
+                STREAK: <span id="streak-count">0</span> 
+                <span id="streak-emoji" class="streak-flame">🔥</span>
+            </div>
+            <div class="text-sm font-bold">POINTS: <span id="points-count">0</span> ⭐</div>
+            <div class="text-sm font-bold">LEVEL: <span id="level-badge">1</span> 🏆</div>
         </div>
     </nav>
 
     <main class="flex-grow container mx-auto px-4 py-12">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
             
-            <div class="flex flex-col items-center justify-center border-2 border-black p-10">
+            <!-- Timer Section -->
+            <div class="flex flex-col items-center justify-center border-2 border-black p-10 relative">
                 <h2 class="uppercase text-xs tracking-widest mb-4">Current Session</h2>
-                <div id="timer-display" class="text-9xl font-black mb-8">25:00</div>
                 
+                <!-- Timer Display with Progress Circle -->
+                <div class="relative mb-8">
+                    <svg class="transform -rotate-90 w-64 h-64">
+                        <circle cx="128" cy="128" r="116" fill="none" stroke="#e5e5e5" stroke-width="4"/>
+                        <circle id="timer-progress" cx="128" cy="128" r="116" fill="none" stroke="#000" 
+                                stroke-width="8" stroke-dasharray="728" stroke-dashoffset="728" 
+                                stroke-linecap="round" class="timer-progress"/>
+                    </svg>
+                    <div id="timer-display" class="absolute inset-0 flex items-center justify-center text-6xl font-black">25:00</div>
+                </div>
+                
+                <!-- Setup Controls -->
                 <div id="setup-controls" class="flex gap-4">
                     <button onclick="initTimer(25)" class="border-2 border-black px-8 py-3 hover:bg-black hover:text-white transition-all font-bold">25m</button>
                     <button onclick="initTimer(45)" class="border-2 border-black px-8 py-3 hover:bg-black hover:text-white transition-all font-bold">45m</button>
                     <button onclick="initTimer(60)" class="border-2 border-black px-8 py-3 hover:bg-black hover:text-white transition-all font-bold">60m</button>
                 </div>
 
-                <div id="active-controls" class="hidden flex flex-col items-center">
+                <!-- Active Controls -->
+                <div id="active-controls" class="hidden flex flex-col items-center w-full">
                     <p class="text-red-600 mb-4 animate-pulse uppercase text-xs">Focus Mode Active: Blocklist Engaged</p>
-                    <button onclick="emergencyExit()" class="bg-red-600 text-white px-10 py-3 hover:bg-red-700 font-bold">EMERGENCY EXIT (-50 PTS)</button>
+                    <div class="flex gap-4 w-full">
+                        <button onclick="pauseTimer()" id="pause-btn" class="border-2 border-black px-6 py-3 hover:bg-black hover:text-white transition-all font-bold flex-1">
+                            ⏸️ PAUSE
+                        </button>
+                        <button onclick="emergencyExit()" class="bg-red-600 text-white px-6 py-3 hover:bg-red-700 font-bold flex-1">
+                            ⚠️ EXIT
+                        </button>
+                    </div>
                 </div>
             </div>
 
+            <!-- Right Column -->
             <div class="space-y-8">
+                <!-- Stats Chart -->
                 <div class="border-2 border-black p-6">
-                    <h3 class="font-black uppercase mb-4">Productivity Trend</h3>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-black uppercase">Productivity Trend</h3>
+                        <button onclick="resetStats()" class="text-xs border border-black px-2 py-1 hover:bg-black hover:text-white">
+                            RESET
+                        </button>
+                    </div>
                     <canvas id="productivityChart" height="150"></canvas>
                 </div>
 
+                <!-- Distraction Shield -->
                 <div class="border-2 border-black p-6">
                     <h3 class="font-black uppercase mb-4">Distraction Shield</h3>
                     <div class="flex gap-2 mb-4">
-                        <input type="text" id="site-input" placeholder="e.g. youtube.com" class="flex-grow border border-black p-2 focus:outline-none focus:ring-1 focus:ring-black">
-                        <button onclick="addSite()" class="bg-black text-white px-6 py-2">BLOCK</button>
+                        <input type="text" id="site-input" placeholder="e.g. youtube.com" 
+                               class="flex-grow border border-black p-2 focus:outline-none focus:ring-1 focus:ring-black"
+                               onkeypress="if(event.key==='Enter') addSite()">
+                        <button onclick="addSite()" class="bg-black text-white px-6 py-2 hover:bg-gray-800 transition-colors">
+                            BLOCK
+                        </button>
                     </div>
                     <ul id="block-list" class="space-y-2 text-sm italic opacity-70">
-                        </ul>
+                        <!-- Blocklist items will be rendered here -->
+                    </ul>
+                    <p class="text-xs mt-4 text-gray-500">⚠️ In real app, this would integrate with browser extensions</p>
+                </div>
+
+                <!-- Achievements -->
+                <div class="border-2 border-black p-6">
+                    <h3 class="font-black uppercase mb-4">Achievements</h3>
+                    <div id="achievements" class="grid grid-cols-2 gap-2 text-sm">
+                        <!-- Achievements will be rendered here -->
+                    </div>
                 </div>
             </div>
         </div>
     </main>
 
+    <!-- Toast Notifications -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-black text-white px-6 py-3 transform translate-y-full transition-transform duration-300">
+        Notification
+    </div>
+
     <script>
+        // State Management
         let timer;
         let timeLeft;
         let isFocusing = false;
-        let blocklist = ['facebook.com', 'tiktok.com'];
+        let isPaused = false;
+        let blocklist = ['facebook.com', 'tiktok.com', 'instagram.com', 'twitter.com', 'youtube.com'];
+        let stats = {
+            sessions: [],
+            streak: 0,
+            points: 0,
+            lastSessionDate: null,
+            achievements: []
+        };
 
-        // Initialize Stats Chart
-        const ctx = document.getElementById('productivityChart').getContext('2d');
-        const statsChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
-                datasets: [{
-                    label: 'Focus Minutes',
-                    data: [120, 150, 80, 200, 45, 0, 0],
-                    backgroundColor: '#000'
-                }]
-            },
-            options: { 
-                plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true, grid: { display: false } } }
+        // Initialize from localStorage
+        function loadStats() {
+            const saved = localStorage.getItem('focuslock_stats');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    stats = parsed;
+                    
+                    // Ensure arrays exist
+                    stats.sessions = stats.sessions || [];
+                    stats.achievements = stats.achievements || [];
+                    
+                    updateUI();
+                } catch (e) {
+                    console.error('Failed to load stats', e);
+                }
             }
-        });
-
-        function updateDisplay() {
-            const mins = Math.floor(timeLeft / 60);
-            const secs = timeLeft % 60;
-            document.getElementById('timer-display').innerText = 
-                `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
 
+        // Save to localStorage
+        function saveStats() {
+            localStorage.setItem('focuslock_stats', JSON.stringify(stats));
+            updateUI();
+        }
+
+        // Update UI elements
+        function updateUI() {
+            document.getElementById('streak-count').textContent = stats.streak || 0;
+            document.getElementById('points-count').textContent = stats.points || 0;
+            
+            // Update streak emoji
+            const streakEmoji = document.getElementById('streak-emoji');
+            if (stats.streak >= 3) {
+                streakEmoji.innerHTML = '🔥🔥';
+                streakEmoji.classList.add('active');
+            } else if (stats.streak >= 1) {
+                streakEmoji.innerHTML = '🔥';
+                streakEmoji.classList.add('active');
+            } else {
+                streakEmoji.innerHTML = '🔥';
+                streakEmoji.classList.remove('active');
+            }
+
+            // Calculate level
+            const level = Math.floor((stats.points || 0) / 100) + 1;
+            document.getElementById('level-badge').textContent = level;
+
+            // Update achievements
+            renderAchievements();
+
+            // Update chart
+            updateChart();
+        }
+
+        // Initialize Chart
+        let statsChart;
+        function initChart() {
+            const ctx = document.getElementById('productivityChart').getContext('2d');
+            
+            // Get last 7 days of data
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const today = new Date().getDay();
+            const orderedDays = [...days.slice(today), ...days.slice(0, today)];
+            
+            // Calculate minutes per day
+            const minutesPerDay = new Array(7).fill(0);
+            if (stats.sessions) {
+                stats.sessions.forEach(session => {
+                    if (session.status === 'completed') {
+                        const sessionDate = new Date(session.date);
+                        const dayDiff = Math.floor((new Date() - sessionDate) / (1000 * 60 * 60 * 24));
+                        if (dayDiff < 7) {
+                            minutesPerDay[6 - dayDiff] += session.duration;
+                        }
+                    }
+                });
+            }
+
+            statsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: orderedDays,
+                    datasets: [{
+                        label: 'Focus Minutes',
+                        data: minutesPerDay,
+                        borderColor: '#000',
+                        backgroundColor: 'rgba(0,0,0,0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: { 
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            grid: { display: true, color: '#eee' },
+                            ticks: { stepSize: 30 }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function updateChart() {
+            if (statsChart) {
+                statsChart.destroy();
+            }
+            initChart();
+        }
+
+        // Timer Functions
         function initTimer(minutes) {
+            if (isFocusing && !confirm('A session is already active. Start a new one?')) {
+                return;
+            }
+            
             timeLeft = minutes * 60;
             isFocusing = true;
-            updateDisplay();
+            isPaused = false;
+            updateTimerDisplay();
             
             document.getElementById('setup-controls').classList.add('hidden');
             document.getElementById('active-controls').classList.remove('hidden');
             document.body.classList.add('focus-mode');
+            
+            // Update progress circle
+            const totalTime = minutes * 60;
+            const circle = document.getElementById('timer-progress');
+            circle.style.strokeDashoffset = (728 * (1 - timeLeft / totalTime));
+            
+            startTimer();
+        }
 
+        function startTimer() {
             timer = setInterval(() => {
-                timeLeft--;
-                updateDisplay();
-                if (timeLeft <= 0) finishSession(true);
+                if (!isPaused && isFocusing) {
+                    timeLeft--;
+                    updateTimerDisplay();
+                    
+                    // Update progress circle
+                    const totalTime = parseInt(timeLeft / 60) * 60 + 60; // Approximate total
+                    const circle = document.getElementById('timer-progress');
+                    const progress = 1 - (timeLeft / totalTime);
+                    circle.style.strokeDashoffset = 728 * (1 - progress);
+                    
+                    if (timeLeft <= 0) {
+                        finishSession(true);
+                    }
+                }
             }, 1000);
+        }
+
+        function pauseTimer() {
+            isPaused = !isPaused;
+            const pauseBtn = document.getElementById('pause-btn');
+            pauseBtn.innerHTML = isPaused ? '▶️ RESUME' : '⏸️ PAUSE';
+            showToast(isPaused ? 'Timer paused' : 'Timer resumed');
+        }
+
+        function updateTimerDisplay() {
+            const mins = Math.floor(Math.max(0, timeLeft) / 60);
+            const secs = Math.max(0, timeLeft) % 60;
+            document.getElementById('timer-display').innerText = 
+                `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
 
         async function finishSession(success) {
             clearInterval(timer);
+            
+            if (success && isFocusing) {
+                const duration = Math.floor((parseInt(timeLeft) / 60) + 0.5); // Approximate
+                
+                // Save session
+                const session = {
+                    id: Date.now(),
+                    duration: duration,
+                    status: 'completed',
+                    date: new Date().toISOString()
+                };
+                
+                stats.sessions.push(session);
+                
+                // Update points (10 points per minute)
+                stats.points = (stats.points || 0) + duration * 10;
+                
+                // Update streak
+                const today = new Date().toDateString();
+                if (stats.lastSessionDate !== today) {
+                    stats.streak = (stats.streak || 0) + 1;
+                    stats.lastSessionDate = today;
+                }
+                
+                // Check for achievements
+                checkAchievements();
+                
+                saveStats();
+                
+                // Celebration effect
+                document.getElementById('timer-display').classList.add('session-complete');
+                setTimeout(() => {
+                    document.getElementById('timer-display').classList.remove('session-complete');
+                }, 1000);
+                
+                showToast(`🎉 Great work! +${duration * 10} points`);
+            }
+            
             isFocusing = false;
             document.body.classList.remove('focus-mode');
             document.getElementById('setup-controls').classList.remove('hidden');
             document.getElementById('active-controls').classList.add('hidden');
-
-            if (success) {
-                alert("Great work! Session recorded.");
-                // In a real app, you'd fetch('/api/sessions') here
-            }
+            
+            // Reset timer display
+            timeLeft = 25 * 60;
+            updateTimerDisplay();
+            document.getElementById('timer-progress').style.strokeDashoffset = 0;
         }
 
         function emergencyExit() {
-            if(confirm("Exit now? This session will be marked as FAILED.")) {
+            if(confirm("Exit now? This session will be marked as FAILED and you'll lose 50 points!")) {
+                // Deduct points
+                stats.points = Math.max(0, (stats.points || 0) - 50);
+                
+                // Break streak
+                stats.streak = 0;
+                
+                // Save failed session
+                const session = {
+                    id: Date.now(),
+                    duration: 0,
+                    status: 'failed',
+                    date: new Date().toISOString()
+                };
+                stats.sessions.push(session);
+                
+                saveStats();
                 finishSession(false);
+                showToast('💔 Session failed -50 points');
             }
         }
 
+        // Blocklist Functions
         function addSite() {
             const input = document.getElementById('site-input');
-            if(input.value) {
-                blocklist.push(input.value);
+            const site = input.value.trim().toLowerCase();
+            
+            if(site && !blocklist.includes(site)) {
+                blocklist.push(site);
                 renderBlocklist();
                 input.value = '';
+                showToast(`🔒 ${site} added to blocklist`);
+                
+                // Save blocklist to localStorage
+                localStorage.setItem('focuslock_blocklist', JSON.stringify(blocklist));
+            } else if (blocklist.includes(site)) {
+                showToast('Site already in blocklist');
             }
+        }
+
+        function removeSite(site) {
+            blocklist = blocklist.filter(s => s !== site);
+            renderBlocklist();
+            localStorage.setItem('focuslock_blocklist', JSON.stringify(blocklist));
+            showToast(`🔓 ${site} removed`);
         }
 
         function renderBlocklist() {
             const list = document.getElementById('block-list');
-            list.innerHTML = blocklist.map(site => `<li>• ${site}</li>`).join('');
+            list.innerHTML = blocklist.map(site => 
+                `<li class="flex justify-between items-center distraction-item group">
+                    <span>• ${site}</span>
+                    <button onclick="removeSite('${site}')" class="text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                        ✕
+                    </button>
+                </li>`
+            ).join('');
         }
 
-        renderBlocklist();
+        // Achievements
+        function checkAchievements() {
+            const achievements = [];
+            
+            if (stats.points >= 100) achievements.push('first_100');
+            if (stats.points >= 500) achievements.push('focus_master');
+            if (stats.streak >= 3) achievements.push('streak_3');
+            if (stats.streak >= 7) achievements.push('streak_7');
+            if (stats.sessions.length >= 10) achievements.push('dedicated');
+            
+            stats.achievements = [...new Set([...stats.achievements, ...achievements])];
+        }
+
+        function renderAchievements() {
+            const achievementsList = document.getElementById('achievements');
+            const allAchievements = {
+                first_100: { name: 'First 100', emoji: '🌟', desc: 'Earn 100 points' },
+                focus_master: { name: 'Focus Master', emoji: '👑', desc: 'Earn 500 points' },
+                streak_3: { name: 'On Fire', emoji: '🔥', desc: '3 day streak' },
+                streak_7: { name: 'Unstoppable', emoji: '⚡', desc: '7 day streak' },
+                dedicated: { name: 'Dedicated', emoji: '🎯', desc: '10 sessions' }
+            };
+            
+            achievementsList.innerHTML = Object.entries(allAchievements).map(([key, ach]) => {
+                const unlocked = stats.achievements.includes(key);
+                return `
+                    <div class="border border-black p-2 text-center ${unlocked ? 'bg-black text-white' : 'opacity-30'}">
+                        <div class="text-2xl">${ach.emoji}</div>
+                        <div class="text-xs font-bold">${ach.name}</div>
+                        <div class="text-xxs opacity-75">${ach.desc}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Reset stats
+        function resetStats() {
+            if (confirm('Reset all stats? This cannot be undone.')) {
+                stats = {
+                    sessions: [],
+                    streak: 0,
+                    points: 0,
+                    lastSessionDate: null,
+                    achievements: []
+                };
+                saveStats();
+                showToast('Stats reset');
+            }
+        }
+
+        // Toast notification
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.remove('translate-y-full');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-full');
+            }, 3000);
+        }
+
+        // Load blocklist from localStorage
+        function loadBlocklist() {
+            const saved = localStorage.getItem('focuslock_blocklist');
+            if (saved) {
+                try {
+                    blocklist = JSON.parse(saved);
+                } catch (e) {
+                    console.error('Failed to load blocklist', e);
+                }
+            }
+            renderBlocklist();
+        }
+
+        // Initialize
+        loadStats();
+        loadBlocklist();
+        initChart();
     </script>
 </body>
 </html>
